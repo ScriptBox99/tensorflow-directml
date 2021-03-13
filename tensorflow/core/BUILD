@@ -3792,6 +3792,7 @@ cc_library(
         ":lib_internal",
         "//third_party/dml:dx_helpers",
         "@dml_redist//:headers",
+        "@pix//:headers",
         "//third_party/dml:winadapter",
     ],
     alwayslink = 1,

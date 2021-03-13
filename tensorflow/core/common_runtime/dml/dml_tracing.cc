@@ -22,6 +22,8 @@
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/util/env_var.h"
 
+#include "pix3.h"
+
 TRACELOGGING_DECLARE_PROVIDER(g_providerHandle);
 
 // {0E57B9AE-5CE1-4BEF-86BC-24152F6A9560}
