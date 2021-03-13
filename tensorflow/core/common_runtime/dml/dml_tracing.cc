@@ -4,6 +4,40 @@
 #include <TraceLoggingProvider.h>
 #include <evntrace.h>
 // clang-format on
+
+#define USE_PIX
+#include "pix3.h"
+#include <d3d12.h>
+
+typedef HRESULT(WINAPI* PIXBeginEventOnCommandListFn)(ID3D12GraphicsCommandList* commandList, UINT64 color, PCSTR formatString);
+typedef HRESULT(WINAPI* PIXEndEventOnCommandListFn)(ID3D12GraphicsCommandList* commandList);
+typedef HRESULT(WINAPI* PIXSetMarkerOnCommandListFn)(ID3D12GraphicsCommandList* commandList, UINT64 color, PCSTR formatString);
+
+static PIXBeginEventOnCommandListFn g_pixBeginEventOnCommandList = nullptr;
+static PIXEndEventOnCommandListFn g_pixEndEventOnCommandList = nullptr;
+static PIXSetMarkerOnCommandListFn g_pixSetMarkerOnCommandList = nullptr;
+
+void BeginEventOnCommandList(ID3D12GraphicsCommandList* command_list, UINT64 color, PCSTR format_string)
+{
+  if (g_pixBeginEventOnCommandList) {
+    g_pixBeginEventOnCommandList(command_list, color, format_string);
+  }
+}
+
+void EndEventOnCommandList(ID3D12GraphicsCommandList* command_list)
+{
+  if (g_pixEndEventOnCommandList) {
+    g_pixEndEventOnCommandList(command_list);
+  }
+}
+
+void SetMarkerOnCommandList(ID3D12GraphicsCommandList* command_list, UINT64 color, PCSTR format_string)
+{
+  if (g_pixSetMarkerOnCommandList) {
+    g_pixSetMarkerOnCommandList(command_list, color, format_string);
+  }
+}
+
 #else
 // No-op macros for WSL
 #define TRACELOGGING_DECLARE_PROVIDER(...)
@@ -21,8 +55,8 @@
 #include "dml_tracing.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/util/env_var.h"
-
-#include "pix3.h"
+#include "tensorflow/core/platform/env.h"
+#include "tensorflow/stream_executor/platform/default/dso_loader.h"
 
 TRACELOGGING_DECLARE_PROVIDER(g_providerHandle);
 
@@ -41,6 +75,13 @@ DmlTracing::DmlTracing() {
   if (s.ok()) {
     trace_level_ = static_cast<TraceLevel>(trace_level);
   }
+
+  auto pix_handle_or = stream_executor::internal::CachedDsoLoader::GetPixDsoHandle();
+  if (pix_handle_or.ok()) {
+    tensorflow::Env::Default()->GetSymbolFromLibrary(pix_handle_or.ValueOrDie(), "PIXBeginEventOnCommandList", reinterpret_cast<void**>(&g_pixBeginEventOnCommandList));
+    tensorflow::Env::Default()->GetSymbolFromLibrary(pix_handle_or.ValueOrDie(), "PIXEndEventOnCommandList", reinterpret_cast<void**>(&g_pixEndEventOnCommandList));
+    tensorflow::Env::Default()->GetSymbolFromLibrary(pix_handle_or.ValueOrDie(), "PIXSetMarkerOnCommandList", reinterpret_cast<void**>(&g_pixSetMarkerOnCommandList));
+  }
 }
 
 DmlTracing::~DmlTracing() { TraceLoggingUnregister(g_providerHandle); }
@@ -54,6 +95,7 @@ void DmlTracing::LogSessionRunStart() {
   if (trace_level_ >= LowFrequency) {
     TraceLoggingWrite(g_providerHandle, "SessionRun",
                       TraceLoggingOpcode(EVENT_TRACE_TYPE_START));
+    BeginEventOnCommandList(nullptr, 0, "SessionRun");
   }
 }
 
@@ -61,6 +103,7 @@ void DmlTracing::LogSessionRunEnd() {
   if (trace_level_ >= LowFrequency) {
     TraceLoggingWrite(g_providerHandle, "SessionRun",
                       TraceLoggingOpcode(EVENT_TRACE_TYPE_STOP));
+    EndEventOnCommandList(nullptr);
   }
 }
 
