@@ -9,30 +9,32 @@
 #include "pix3.h"
 #include <d3d12.h>
 
-typedef HRESULT(WINAPI* PIXBeginEventOnCommandListFn)(ID3D12GraphicsCommandList* commandList, UINT64 color, PCSTR formatString);
-typedef HRESULT(WINAPI* PIXEndEventOnCommandListFn)(ID3D12GraphicsCommandList* commandList);
-typedef HRESULT(WINAPI* PIXSetMarkerOnCommandListFn)(ID3D12GraphicsCommandList* commandList, UINT64 color, PCSTR formatString);
+typedef HRESULT(WINAPI* PIXBeginEventOnCommandListFn)(
+    ID3D12GraphicsCommandList* commandList, UINT64 color, PCSTR formatString);
+typedef HRESULT(WINAPI* PIXEndEventOnCommandListFn)(
+    ID3D12GraphicsCommandList* commandList);
+typedef HRESULT(WINAPI* PIXSetMarkerOnCommandListFn)(
+    ID3D12GraphicsCommandList* commandList, UINT64 color, PCSTR formatString);
 
 static PIXBeginEventOnCommandListFn g_pixBeginEventOnCommandList = nullptr;
 static PIXEndEventOnCommandListFn g_pixEndEventOnCommandList = nullptr;
 static PIXSetMarkerOnCommandListFn g_pixSetMarkerOnCommandList = nullptr;
 
-void BeginEventOnCommandList(ID3D12GraphicsCommandList* command_list, UINT64 color, PCSTR format_string)
-{
+void BeginEventOnCommandList(ID3D12GraphicsCommandList* command_list,
+                             UINT64 color, PCSTR format_string) {
   if (g_pixBeginEventOnCommandList) {
     g_pixBeginEventOnCommandList(command_list, color, format_string);
   }
 }
 
-void EndEventOnCommandList(ID3D12GraphicsCommandList* command_list)
-{
+void EndEventOnCommandList(ID3D12GraphicsCommandList* command_list) {
   if (g_pixEndEventOnCommandList) {
     g_pixEndEventOnCommandList(command_list);
   }
 }
 
-void SetMarkerOnCommandList(ID3D12GraphicsCommandList* command_list, UINT64 color, PCSTR format_string)
-{
+void SetMarkerOnCommandList(ID3D12GraphicsCommandList* command_list,
+                            UINT64 color, PCSTR format_string) {
   if (g_pixSetMarkerOnCommandList) {
     g_pixSetMarkerOnCommandList(command_list, color, format_string);
   }
@@ -76,11 +78,18 @@ DmlTracing::DmlTracing() {
     trace_level_ = static_cast<TraceLevel>(trace_level);
   }
 
-  auto pix_handle_or = stream_executor::internal::CachedDsoLoader::GetPixDsoHandle();
+  auto pix_handle_or =
+      stream_executor::internal::CachedDsoLoader::GetPixDsoHandle();
   if (pix_handle_or.ok()) {
-    tensorflow::Env::Default()->GetSymbolFromLibrary(pix_handle_or.ValueOrDie(), "PIXBeginEventOnCommandList", reinterpret_cast<void**>(&g_pixBeginEventOnCommandList));
-    tensorflow::Env::Default()->GetSymbolFromLibrary(pix_handle_or.ValueOrDie(), "PIXEndEventOnCommandList", reinterpret_cast<void**>(&g_pixEndEventOnCommandList));
-    tensorflow::Env::Default()->GetSymbolFromLibrary(pix_handle_or.ValueOrDie(), "PIXSetMarkerOnCommandList", reinterpret_cast<void**>(&g_pixSetMarkerOnCommandList));
+    tensorflow::Env::Default()->GetSymbolFromLibrary(
+        pix_handle_or.ValueOrDie(), "PIXBeginEventOnCommandList",
+        reinterpret_cast<void**>(&g_pixBeginEventOnCommandList));
+    tensorflow::Env::Default()->GetSymbolFromLibrary(
+        pix_handle_or.ValueOrDie(), "PIXEndEventOnCommandList",
+        reinterpret_cast<void**>(&g_pixEndEventOnCommandList));
+    tensorflow::Env::Default()->GetSymbolFromLibrary(
+        pix_handle_or.ValueOrDie(), "PIXSetMarkerOnCommandList",
+        reinterpret_cast<void**>(&g_pixSetMarkerOnCommandList));
   }
 }
 
@@ -132,5 +141,18 @@ void DmlTracing::LogKernelCompute(const std::string& op_type,
     TraceLoggingWrite(g_providerHandle, "KernelCompute",
                       TraceLoggingString(op_type.c_str(), "Type"),
                       TraceLoggingString(op_name.c_str(), "Name"));
+  }
+}
+
+void DmlTracing::LogKernelExecuteBegin(ID3D12GraphicsCommandList* command_list,
+                                       UINT64 color, const std::string& name) {
+  if (trace_level_ >= All) {
+    BeginEventOnCommandList(command_list, color, name.c_str());
+  }
+}
+
+void DmlTracing::LogKernelExecuteEnd(ID3D12GraphicsCommandList* command_list) {
+  if (trace_level_ >= All) {
+    EndEventOnCommandList(command_list);
   }
 }

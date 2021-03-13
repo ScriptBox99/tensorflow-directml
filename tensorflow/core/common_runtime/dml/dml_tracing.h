@@ -27,4 +27,8 @@ class DmlTracing {
   void LogExecutionContextFillBufferWithPattern();
   void LogExecutionContextFlush();
   void LogKernelCompute(const std::string& op_type, const std::string& op_name);
+
+  // GPU timeline
+  void LogKernelExecuteBegin(ID3D12GraphicsCommandList* command_list, UINT64 color, const std::string& name);
+  void LogKernelExecuteEnd(ID3D12GraphicsCommandList* command_list);
 };
