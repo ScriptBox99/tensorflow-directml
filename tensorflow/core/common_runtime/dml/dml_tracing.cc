@@ -16,6 +16,8 @@ typedef HRESULT(WINAPI* PIXEndEventOnCommandListFn)(
 typedef HRESULT(WINAPI* PIXSetMarkerOnCommandListFn)(
     ID3D12GraphicsCommandList* commandList, UINT64 color, PCSTR formatString);
 
+static decltype(PIXGetThreadInfo)* g_pixGetThreadInfo = nullptr;
+static decltype(PIXEventsReplaceBlock)* g_pixEventsReplaceBlock = nullptr;
 static PIXBeginEventOnCommandListFn g_pixBeginEventOnCommandList = nullptr;
 static PIXEndEventOnCommandListFn g_pixEndEventOnCommandList = nullptr;
 static PIXSetMarkerOnCommandListFn g_pixSetMarkerOnCommandList = nullptr;
@@ -38,6 +40,21 @@ void SetMarkerOnCommandList(ID3D12GraphicsCommandList* command_list,
   if (g_pixSetMarkerOnCommandList) {
     g_pixSetMarkerOnCommandList(command_list, color, format_string);
   }
+}
+
+extern "C" PIXEventsThreadInfo* PIXGetThreadInfo() noexcept {
+  if (!g_pixGetThreadInfo) {
+    return nullptr;
+  }
+  return g_pixGetThreadInfo();
+}
+
+extern "C" UINT64 WINAPI PIXEventsReplaceBlock(PIXEventsThreadInfo* threadInfo,
+                                               bool getEarliestTime) noexcept {
+  if (!g_pixEventsReplaceBlock) {
+    return 0;
+  }
+  return g_pixEventsReplaceBlock(threadInfo, getEarliestTime);
 }
 
 #else
@@ -82,6 +99,12 @@ DmlTracing::DmlTracing() {
       stream_executor::internal::CachedDsoLoader::GetPixDsoHandle();
   if (pix_handle_or.ok()) {
     tensorflow::Env::Default()->GetSymbolFromLibrary(
+        pix_handle_or.ValueOrDie(), "PIXGetThreadInfo",
+        reinterpret_cast<void**>(&g_pixGetThreadInfo));
+    tensorflow::Env::Default()->GetSymbolFromLibrary(
+        pix_handle_or.ValueOrDie(), "PIXEventsReplaceBlock",
+        reinterpret_cast<void**>(&g_pixEventsReplaceBlock));
+    tensorflow::Env::Default()->GetSymbolFromLibrary(
         pix_handle_or.ValueOrDie(), "PIXBeginEventOnCommandList",
         reinterpret_cast<void**>(&g_pixBeginEventOnCommandList));
     tensorflow::Env::Default()->GetSymbolFromLibrary(
@@ -104,7 +127,7 @@ void DmlTracing::LogSessionRunStart() {
   if (trace_level_ >= LowFrequency) {
     TraceLoggingWrite(g_providerHandle, "SessionRun",
                       TraceLoggingOpcode(EVENT_TRACE_TYPE_START));
-    PIXBeginEvent(PIX_COLOR(255,0,0), "SessionRun");
+    PIXBeginEvent(PIX_COLOR(255, 0, 0), "SessionRun");
   }
 }
 
@@ -144,10 +167,12 @@ void DmlTracing::LogKernelCompute(const std::string& op_type,
   }
 }
 
-void DmlTracing::LogKernelExecuteBegin(IDMLCompiledOperator* op, ID3D12GraphicsCommandList* command_list,
+void DmlTracing::LogKernelExecuteBegin(IDMLCompiledOperator* op,
+                                       ID3D12GraphicsCommandList* command_list,
                                        UINT64 color) {
   if (trace_level_ >= All) {
-    GUID op_type_guid = { 0xc4fec28f, 0x7966, 0x4e95, 0x9f, 0x94, 0xf4, 0x31, 0xcb, 0x56, 0xc3, 0xb8 };
+    GUID op_type_guid = {0xc4fec28f, 0x7966, 0x4e95, 0x9f, 0x94, 0xf4,
+                         0x31,       0xcb,   0x56,   0xc3, 0xb8};
     std::vector<char> chars(100);
     UINT data_size = (UINT)(chars.size() * sizeof(char));
     op->GetPrivateData(op_type_guid, &data_size, chars.data());
