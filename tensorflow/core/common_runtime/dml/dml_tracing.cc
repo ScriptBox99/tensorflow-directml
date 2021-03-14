@@ -142,10 +142,14 @@ void DmlTracing::LogKernelCompute(const std::string& op_type,
   }
 }
 
-void DmlTracing::LogKernelExecuteBegin(ID3D12GraphicsCommandList* command_list,
-                                       UINT64 color, const std::string& name) {
+void DmlTracing::LogKernelExecuteBegin(IDMLCompiledOperator* op, ID3D12GraphicsCommandList* command_list,
+                                       UINT64 color) {
   if (trace_level_ >= All) {
-    BeginEventOnCommandList(command_list, color, name.c_str());
+    GUID op_type_guid = { 0xc4fec28f, 0x7966, 0x4e95, 0x9f, 0x94, 0xf4, 0x31, 0xcb, 0x56, 0xc3, 0xb8 };
+    std::vector<char> chars(100);
+    UINT data_size = (UINT)(chars.size() * sizeof(char));
+    op->GetPrivateData(op_type_guid, &data_size, chars.data());
+    BeginEventOnCommandList(command_list, color, chars.data());
   }
 }
 

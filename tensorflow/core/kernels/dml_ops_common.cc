@@ -195,9 +195,15 @@ void DmlKernel::Initialize(DmlKernelConstruction* ctx,
   // Set the name of this compiled op, for debugging purposes. We use the name
   // of the op (e.g. "Conv2D") rather than the name of the node because this
   // kernel may be shared across many nodes.
-  std::wstring op_type =
-      Utf8ToWideChar(ctx->GetOpKernelContext()->op_kernel().type_string());
+  std::string op_type_c = ctx->GetOpKernelContext()->op_kernel().type_string();
+  std::wstring op_type = Utf8ToWideChar(op_type_c);
   DML_CHECK_SUCCEEDED(compiled_op->SetName(op_type.c_str()));
+
+  GUID op_type_guid = {0xc4fec28f, 0x7966, 0x4e95, 0x9f, 0x94, 0xf4,
+                       0x31,       0xcb,   0x56,   0xc3, 0xb8};
+  DML_CHECK_SUCCEEDED(compiled_op->SetPrivateData(
+      op_type_guid, static_cast<UINT>(op_type_c.size()),
+      op_type_c.c_str()));
 #endif
 
   compiled_op_ = compiled_op;
