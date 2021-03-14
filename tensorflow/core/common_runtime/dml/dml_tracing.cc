@@ -104,7 +104,6 @@ void DmlTracing::LogSessionRunStart() {
   if (trace_level_ >= LowFrequency) {
     TraceLoggingWrite(g_providerHandle, "SessionRun",
                       TraceLoggingOpcode(EVENT_TRACE_TYPE_START));
-    BeginEventOnCommandList(nullptr, 0, "SessionRun");
   }
 }
 
@@ -112,7 +111,6 @@ void DmlTracing::LogSessionRunEnd() {
   if (trace_level_ >= LowFrequency) {
     TraceLoggingWrite(g_providerHandle, "SessionRun",
                       TraceLoggingOpcode(EVENT_TRACE_TYPE_STOP));
-    EndEventOnCommandList(nullptr);
   }
 }
 
