@@ -155,6 +155,7 @@ void DmlTracing::LogExecutionContextFillBufferWithPattern() {
 void DmlTracing::LogExecutionContextFlush() {
   if (trace_level_ >= All) {
     TraceLoggingWrite(g_providerHandle, "ExecutionContextFlush");
+    PIXSetMarker(0, "EC Flush");
   }
 }
 

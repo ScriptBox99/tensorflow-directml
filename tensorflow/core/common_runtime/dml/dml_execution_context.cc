@@ -256,6 +256,7 @@ D3D12_COMMAND_LIST_TYPE DmlExecutionContext::GetCommandListTypeForQueue()
     lock.unlock();
 
     if (flush) {
+      DmlTracing::Instance().LogExecutionContextFlush();
       // Record the commands into the command list.
       command_list->Open(batch_completion_event);
       for (auto& command : batch) {
