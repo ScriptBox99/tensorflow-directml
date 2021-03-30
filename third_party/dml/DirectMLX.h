@@ -3225,6 +3225,68 @@ namespace dml
         return output;
     }
 
+    inline Expression RoiAlignImageGrad(
+        Expression inputGradient,
+        Expression roi,
+        Expression batchIndices,
+        Optional<Expression> input,
+        DML_REDUCE_FUNCTION reductionFunction,
+        DML_INTERPOLATION_MODE interpolationMode,
+        float spatialScaleX,
+        float spatialScaleY,
+        float inputPixelOffset,
+        float outputPixelOffset,
+        uint32_t minimumSamplesPerOutput,
+        uint32_t maximumSamplesPerOutput,
+        bool alignRegionsToCorners,
+        uint32_t batchSize,
+        uint32_t imageHeight,
+        uint32_t imageWidth)
+    {
+        detail::GraphBuilder* builder = inputGradient.Impl()->GetGraphBuilder();
+
+        TensorDesc inputGradientTensor = inputGradient.Impl()->GetOutputDesc();
+        TensorDesc roiTensor = roi.Impl()->GetOutputDesc();
+        TensorDesc batchIndicesTensor = batchIndices.Impl()->GetOutputDesc();
+        TensorDesc inputTensor = input.has_value() ? input->Impl()->GetOutputDesc() : TensorDesc();
+
+        TensorDesc::Dimensions outputGradientSizes({
+            batchSize,
+            inputGradientTensor.sizes[1],
+            imageHeight,
+            imageWidth,
+        });
+
+        TensorDesc outputGradientTensor(inputGradientTensor.dataType, outputGradientSizes, builder->GetTensorPolicy());
+
+        DML_PREVIEW_ROI_ALIGN_IMAGE_GRAD_OPERATOR_DESC desc = {};
+        desc.InputGradientTensor = inputGradientTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.ROITensor = roiTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.BatchIndicesTensor = batchIndicesTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.OutputGradientTensor = outputGradientTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.InputTensor = input ? inputTensor.AsPtr<DML_TENSOR_DESC>() : nullptr;
+        desc.ReductionFunction = reductionFunction; 
+        desc.InterpolationMode = interpolationMode;
+        desc.SpatialScaleX = spatialScaleX;
+        desc.SpatialScaleY = spatialScaleY;
+        desc.InputPixelOffset = inputPixelOffset;
+        desc.OutputPixelOffset = outputPixelOffset;
+        desc.MinimumSamplesPerOutput = minimumSamplesPerOutput;
+        desc.MaximumSamplesPerOutput = maximumSamplesPerOutput;
+        desc.AlignRegionsToCorners = alignRegionsToCorners;
+
+        SmallVector<detail::NodeOutput*, 4> inputs = { inputGradient.Impl(), roi.Impl(), batchIndices.Impl() };
+        if (input)
+        {
+            inputs.push_back(input->Impl());
+        }
+
+        detail::NodeID node = builder->CreateOperatorNode(static_cast<DML_OPERATOR_TYPE>(DML_PREVIEW_OPERATOR_ROI_ALIGN_IMAGE_GRAD), &desc, inputs);
+        detail::NodeOutput* output = builder->CreateNodeOutput(node, 0, std::move(outputGradientTensor));
+
+        return output;
+    }
+
     // Reinterprets the memory of a tensor with a different type and dimensions (analogously to using
     // reinterpret_cast to access raw bits). Note that this is different to the DML Cast operator, which performs
     // a type cast on the contents of a tensor (analogously to static_cast). The total tensor size of the output
