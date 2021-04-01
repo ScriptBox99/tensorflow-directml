@@ -138,6 +138,14 @@ class DmlCropAndResizeKernel : public DmlKernel {
     auto scope = dml::Graph(ctx->GetDmlDevice(),
                             dml::TensorPolicy::InterleavedChannel());
     auto input = dml::InputTensor(scope, 0, inputs[0]);
+
+    // The output of CropAndResize is always DT_FLOAT, so cast the input to
+    // DT_FLOAT before doing the operation
+    if (ctx->GetOutputDataType(0) != ctx->GetInputDataType(0)) {
+      auto dml_dtype = GetDmlDataTypeFromTfDataType(ctx->GetOutputDataType(0));
+      input = dml::Cast(input, dml_dtype);
+    }
+
     auto roi = dml::InputTensor(scope, 1, inputs[1]);
     auto batch_indices = dml::InputTensor(scope, 2, inputs[2]);
 
@@ -160,34 +168,23 @@ class DmlCropAndResizeKernel : public DmlKernel {
 
     roi = dml::Reinterpret(roi, roi_sizes, roiStrides);
 
-    // DML requires the ROIs to be the same type as the input, but in TensorFlow
-    // it's always float32
-    if (ctx->GetInputDataType(1) != ctx->GetInputDataType(0)) {
-      auto dml_dtype = GetDmlDataTypeFromTfDataType(ctx->GetInputDataType(0));
-      roi = dml::Cast(roi, dml_dtype);
-    }
-
     float spatial_scale_x = image_shape.dim_size(2) - 1;
     float spatial_scale_y = image_shape.dim_size(1) - 1;
-    uint32_t crop_height = output_tensor_shape.dim_size(1);
-    uint32_t crop_width = output_tensor_shape.dim_size(2);
-    constexpr uint32_t minimumSamplesPerOutput = 1;
-    constexpr uint32_t maximumSamplesPerOutput = 1;
-    constexpr float inputPixelOffset = 0;
-    constexpr float outputPixelOffset = 0;
-    constexpr bool alignRegionToCorners = true;
+    const uint32_t crop_height = output_tensor_shape.dim_size(1);
+    const uint32_t crop_width = output_tensor_shape.dim_size(2);
+    constexpr uint32_t minimum_samples_per_output = 1;
+    constexpr uint32_t maximum_samples_per_output = 1;
+    constexpr float input_pixel_offset = 0;
+    constexpr float output_pixel_offset = 0;
+    constexpr bool align_region_to_corners = true;
 
-    auto result = dml::RoiAlign(
-        input, roi, batch_indices, DML_REDUCE_FUNCTION_AVERAGE,
-        init_helper->GetInterpolationMode(), spatial_scale_x, spatial_scale_y,
-        inputPixelOffset, outputPixelOffset,
-        init_helper->GetExtrapolationValue(), minimumSamplesPerOutput,
-        maximumSamplesPerOutput, alignRegionToCorners, crop_height, crop_width);
-
-    if (ctx->GetOutputDataType(0) != ctx->GetInputDataType(0)) {
-      auto dml_dtype = GetDmlDataTypeFromTfDataType(ctx->GetInputDataType(0));
-      result = dml::Cast(result, dml_dtype);
-    }
+    auto result =
+        dml::RoiAlign(input, roi, batch_indices, DML_REDUCE_FUNCTION_AVERAGE,
+                      init_helper->GetInterpolationMode(), spatial_scale_x,
+                      spatial_scale_y, input_pixel_offset, output_pixel_offset,
+                      init_helper->GetExtrapolationValue(),
+                      minimum_samples_per_output, maximum_samples_per_output,
+                      align_region_to_corners, crop_height, crop_width);
 
     Microsoft::WRL::ComPtr<IDMLCompiledOperator> compiled_op =
         scope.Compile(DML_EXECUTION_FLAG_NONE, {result});

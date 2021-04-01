@@ -43,6 +43,49 @@
     4-byte boundary.
     */
 
+enum DML_PREVIEW_OPERATOR_TYPE_TEMP
+{
+    DML_PREVIEW_OPERATOR_FIRST_TEMP = 0xC0000000,
+    DML_PREVIEW_OPERATOR_ROI_ALIGN_IMAGE_GRAD,
+    DML_PREVIEW_OPERATOR_ROI_ALIGN_ROI_GRAD,
+};
+
+struct DML_PREVIEW_ROI_ALIGN_IMAGE_GRAD_OPERATOR_DESC
+{
+    const DML_TENSOR_DESC* InputGradientTensor;
+    const DML_TENSOR_DESC* ROITensor;
+    const DML_TENSOR_DESC* BatchIndicesTensor;
+    _Maybenull_ const DML_TENSOR_DESC* InputTensor;
+    const DML_TENSOR_DESC* OutputGradientTensor;
+    DML_REDUCE_FUNCTION ReductionFunction;
+    DML_INTERPOLATION_MODE InterpolationMode;
+    FLOAT SpatialScaleX;
+    FLOAT SpatialScaleY;
+    FLOAT InputPixelOffset;
+    FLOAT OutputPixelOffset;
+    UINT MinimumSamplesPerOutput;
+    UINT MaximumSamplesPerOutput;
+    BOOL AlignRegionsToCorners;
+};
+
+struct DML_PREVIEW_ROI_ALIGN_ROI_GRAD_OPERATOR_DESC
+{
+    const DML_TENSOR_DESC* InputGradientTensor;
+    const DML_TENSOR_DESC* InputTensor;
+    const DML_TENSOR_DESC* ROITensor;
+    const DML_TENSOR_DESC* BatchIndicesTensor;
+    const DML_TENSOR_DESC* OutputGradientTensor;
+    DML_REDUCE_FUNCTION ReductionFunction;
+    DML_INTERPOLATION_MODE InterpolationMode;
+    FLOAT SpatialScaleX;
+    FLOAT SpatialScaleY;
+    FLOAT InputPixelOffset;
+    FLOAT OutputPixelOffset;
+    UINT MinimumSamplesPerOutput;
+    UINT MaximumSamplesPerOutput;
+    BOOL AlignRegionsToCorners;
+};
+
 inline UINT64 DMLCalcBufferTensorSize(
     DML_TENSOR_DATA_TYPE dataType,
     UINT dimensionCount,
@@ -3275,13 +3318,54 @@ namespace dml
         desc.MaximumSamplesPerOutput = maximumSamplesPerOutput;
         desc.AlignRegionsToCorners = alignRegionsToCorners;
 
-        SmallVector<detail::NodeOutput*, 4> inputs = { inputGradient.Impl(), roi.Impl(), batchIndices.Impl() };
-        if (input)
-        {
-            inputs.push_back(input->Impl());
-        }
-
+        detail::NodeOutput* const inputs[] = { inputGradient.Impl(), roi.Impl(), batchIndices.Impl(), input ? input->Impl() : nullptr };
         detail::NodeID node = builder->CreateOperatorNode(static_cast<DML_OPERATOR_TYPE>(DML_PREVIEW_OPERATOR_ROI_ALIGN_IMAGE_GRAD), &desc, inputs);
+        detail::NodeOutput* output = builder->CreateNodeOutput(node, 0, std::move(outputGradientTensor));
+
+        return output;
+    }
+
+    inline Expression RoiAlignRoiGrad(
+        Expression inputGradient,
+        Expression input,
+        Expression roi,
+        Expression batchIndices,
+        DML_REDUCE_FUNCTION reductionFunction,
+        DML_INTERPOLATION_MODE interpolationMode,
+        float spatialScaleX,
+        float spatialScaleY,
+        float inputPixelOffset,
+        float outputPixelOffset,
+        uint32_t minimumSamplesPerOutput,
+        uint32_t maximumSamplesPerOutput,
+        bool alignRegionsToCorners)
+    {
+        detail::GraphBuilder* builder = inputGradient.Impl()->GetGraphBuilder();
+
+        TensorDesc inputGradientTensor = inputGradient.Impl()->GetOutputDesc();
+        TensorDesc inputTensor = input.Impl()->GetOutputDesc();
+        TensorDesc roiTensor = roi.Impl()->GetOutputDesc();
+        TensorDesc batchIndicesTensor = batchIndices.Impl()->GetOutputDesc();
+        TensorDesc outputGradientTensor(roiTensor.dataType, roiTensor.sizes, builder->GetTensorPolicy());
+
+        DML_PREVIEW_ROI_ALIGN_ROI_GRAD_OPERATOR_DESC desc = {};
+        desc.InputGradientTensor = inputGradientTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.InputTensor = inputTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.ROITensor = roiTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.BatchIndicesTensor = batchIndicesTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.OutputGradientTensor = outputGradientTensor.AsPtr<DML_TENSOR_DESC>();
+        desc.ReductionFunction = reductionFunction; 
+        desc.InterpolationMode = interpolationMode;
+        desc.SpatialScaleX = spatialScaleX;
+        desc.SpatialScaleY = spatialScaleY;
+        desc.InputPixelOffset = inputPixelOffset;
+        desc.OutputPixelOffset = outputPixelOffset;
+        desc.MinimumSamplesPerOutput = minimumSamplesPerOutput;
+        desc.MaximumSamplesPerOutput = maximumSamplesPerOutput;
+        desc.AlignRegionsToCorners = alignRegionsToCorners;
+
+        detail::NodeOutput* const inputs[] = { inputGradient.Impl(), input.Impl(), roi.Impl(), batchIndices.Impl() };
+        detail::NodeID node = builder->CreateOperatorNode(static_cast<DML_OPERATOR_TYPE>(DML_PREVIEW_OPERATOR_ROI_ALIGN_ROI_GRAD), &desc, inputs);
         detail::NodeOutput* output = builder->CreateNodeOutput(node, 0, std::move(outputGradientTensor));
 
         return output;
