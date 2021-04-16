@@ -273,6 +273,18 @@ class BatchNormalizationTest(test.TestCase):
           variance=pop_var,
           data_format=data_format,
           is_training=is_training)
+      print("---------------------------------------------------------")
+      print(f"x_shape={x_shape} ")
+      print(f"x_dtype={x_dtype} ")
+      print(f"scale_shape={scale_shape} ")
+      print(f"scale_dtype={scale_dtype} ")
+      print(f"use_gpu={use_gpu} ")
+      print(f"data_format={data_format} ")
+      print(f"is_training={is_training} ")
+      print(f"err_tolerance={err_tolerance} ")
+      print(y)
+      print(self.evaluate(y))
+      print("---------------------------------------------------------")
       grad_x, grad_scale, grad_offset = gradients_impl.gradients(
           y, [x, scale, offset], grad_y)
 
