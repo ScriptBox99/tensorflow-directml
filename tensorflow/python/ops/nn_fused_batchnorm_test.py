@@ -273,6 +273,8 @@ class BatchNormalizationTest(test.TestCase):
           variance=pop_var,
           data_format=data_format,
           is_training=is_training)
+      grad_x, grad_scale, grad_offset = gradients_impl.gradients(
+          y, [x, scale, offset], grad_y)
       print("---------------------------------------------------------")
       print(f"x_shape={x_shape} ")
       print(f"x_dtype={x_dtype} ")
@@ -282,11 +284,20 @@ class BatchNormalizationTest(test.TestCase):
       print(f"data_format={data_format} ")
       print(f"is_training={is_training} ")
       print(f"err_tolerance={err_tolerance} ")
-      print(y)
+      print("")
+      print(f"y={y}")
       print(self.evaluate(y))
+      print("")
+      print(f"grad_x={grad_x}")
+      print(self.evaluate(grad_x))
+      print("")
+      print(f"grad_scale={grad_scale}")
+      print(self.evaluate(grad_scale))
+      print("")
+      print(f"grad_offset={grad_offset}")
+      print(self.evaluate(grad_offset))
+      print("")
       print("---------------------------------------------------------")
-      grad_x, grad_scale, grad_offset = gradients_impl.gradients(
-          y, [x, scale, offset], grad_y)
 
       if is_training:
         epsilon = y.op.get_attr('epsilon')
@@ -587,7 +598,15 @@ class BatchNormalizationTest(test.TestCase):
     shape = config['shape']
     err_tolerance = config['err_tolerance']
     dtype = config['dtype']
-    for is_training in [True, False]:
+    for is_training in [False]:
+      self._test_grad_grad(
+          shape,
+          dtype, [shape[3]],
+          np.float32,
+          use_gpu=False,
+          data_format='NHWC',
+          is_training=is_training,
+          err_tolerance=err_tolerance)
       if test.is_gpu_available(skip_devices=["SYCL"]):
         self._test_grad_grad(
             shape,
@@ -597,22 +616,6 @@ class BatchNormalizationTest(test.TestCase):
             data_format='NHWC',
             is_training=is_training,
             err_tolerance=err_tolerance)
-        self._test_grad_grad(
-            shape,
-            dtype, [shape[1]],
-            np.float32,
-            use_gpu=True,
-            data_format='NCHW',
-            is_training=is_training,
-            err_tolerance=err_tolerance)
-      self._test_grad_grad(
-          shape,
-          dtype, [shape[3]],
-          np.float32,
-          use_gpu=False,
-          data_format='NHWC',
-          is_training=is_training,
-          err_tolerance=err_tolerance)
 
   @test_util.run_deprecated_v1
   def testBatchNormGradGradConfig1(self):
